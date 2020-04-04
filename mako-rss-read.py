@@ -13,7 +13,7 @@ def parse_results(res):
     channel = news_rss_xml_root[0]
     for item in channel:
         if item.tag == 'item':
-            obj_to_return = {}
+            obj_to_return = {'source': 'mako'}
             for child in item:
                 if child.tag == 'title':
                     obj_to_return['title'] = child.text
@@ -27,6 +27,27 @@ def parse_results(res):
     return jsonify(news)
 
 
+def parse_ynet_results(res):
+    news = []
+    news_rss_xml_root = ET.fromstring(res.content.decode(res.encoding))
+    channel = news_rss_xml_root[0]
+    for item in channel:
+        if item.tag == 'item':
+            obj_to_return = {'source': 'ynet'}
+            for child in item:
+                if child.tag == 'title':
+                    obj_to_return['title'] = child.text
+                if child.tag == 'link':
+                    obj_to_return['link'] = child.text
+                if child.tag == 'pubDate':
+                    obj_to_return['publication_date'] = child.text
+                if child.tag == 'description':
+                    obj_to_return['desc'] = child.text
+                if child.tag == 'guid':
+                    obj_to_return['id'] = child.text
+            news.append(obj_to_return)
+    return jsonify(news)
+
 @app.route("/mako_news")
 def mako_news():
     NEWS_LINK = "http://rcs.mako.co.il/rss/31750a2610f26110VgnVCM1000005201000aRCRD.xml"
@@ -37,6 +58,15 @@ def mako_news():
     except:
         print("Error")
 
+@app.route("/ynet_news")
+def ynet_news():
+    ynet_news_link = "http://www.ynet.co.il/Integration/StoryRss2.xml"
+    try:
+        r = requests.get(ynet_news_link)
+        if r.status_code == 200:
+            return parse_ynet_results(r)
+    except:
+        print("Error")
 
 @app.route("/mako_sport")
 def mako_sport():
