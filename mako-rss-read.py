@@ -7,29 +7,35 @@ import os
 app = Flask(__name__, static_folder='build')
 
 
-def parse_results(res):
+def parse_rss_item(item, source):
+    obj_to_return = {'source': source}
+    for child in item:
+        if child.tag == 'title':
+            obj_to_return['title'] = child.text
+        if child.tag == 'link':
+            obj_to_return['link'] = child.text
+        if child.tag == 'pubDate':
+            obj_to_return['publication_date'] = child.text
+        if child.tag == 'description':
+            obj_to_return['desc'] = child.text
+        if child.tag == 'guid':
+            obj_to_return['id'] = child.text
+    return obj_to_return
+
+
+
+def parse_results(res, source):
     try:
         news = []
         news_rss_xml_root = ET.fromstring(res.text.encode(encoding=res.encoding, errors='strict'))
         channel = news_rss_xml_root[0]
         for item in channel:
             if item.tag == 'item':
-                obj_to_return = {'source': 'mako'}
-                for child in item:
-                    if child.tag == 'title':
-                        obj_to_return['title'] = child.text
-                    if child.tag == 'link':
-                        obj_to_return['link'] = child.text
-                    if child.tag == 'pubDate':
-                        obj_to_return['publication_date'] = child.text
-                    if child.tag == 'shortDescription':
-                        obj_to_return['desc'] = child.text
-                news.append(obj_to_return)
+                news.append(parse_rss_item(item, source))
         return jsonify(news)
     except:
         print("error")
         return jsonify([])
-
 
 
 def parse_ynet_results(res):
@@ -38,19 +44,7 @@ def parse_ynet_results(res):
     channel = news_rss_xml_root[0]
     for item in channel:
         if item.tag == 'item':
-            obj_to_return = {'source': 'ynet'}
-            for child in item:
-                if child.tag == 'title':
-                    obj_to_return['title'] = child.text
-                if child.tag == 'link':
-                    obj_to_return['link'] = child.text
-                if child.tag == 'pubDate':
-                    obj_to_return['publication_date'] = child.text
-                if child.tag == 'description':
-                    obj_to_return['desc'] = child.text
-                if child.tag == 'guid':
-                    obj_to_return['id'] = child.text
-            news.append(obj_to_return)
+            news.append(parse_rss_item(item, 'ynet'))
     return jsonify(news)
 
 MAKO_NEWS_LINKS = {
@@ -65,6 +59,15 @@ YNET_NEWS_LINK = {
     "sports": "http://www.ynet.co.il/Integration/StoryRss3.xml"
 }
 
+WALLA_NEWS_LINK = {
+    "news":"http://rss.walla.co.il/feed/1?type=main",
+    "sports": "http://rss.walla.co.il/feed/3?type=main",
+    "tech": "http://rss.walla.co.il/feed/6?type=main",
+    "tarbut":"http://rss.walla.co.il/feed/4?type=main",
+    "celebs": "http://rss.walla.co.il/feed/22?type=main",
+}
+
+
 @app.route("/mako")
 def mako():
     cats = request.args.get('cat')
@@ -72,13 +75,30 @@ def mako():
     try:
         r = requests.get(link)
         if r.status_code == 200:
-            return parse_results(r)
+            return parse_results(r, "mako")
         else:
             print("Error: ", r.status_code, r.text)
             return jsonify([])
     except:
         print("Error")
         return jsonify([])
+
+
+@app.route("/walla")
+def walla():
+    cats = request.args.get('cat')
+    link = WALLA_NEWS_LINK[cats]
+    try:
+        r = requests.get(link)
+        if r.status_code == 200:
+            return parse_results(r, "walla")
+        else:
+            print("Error: ", r.status_code, r.text)
+            return jsonify([])
+    except Exception as e:
+        print("Error: ", e)
+        return jsonify([])
+
 
 @app.route("/ynet")
 def ynet_news():
@@ -88,9 +108,12 @@ def ynet_news():
         r = requests.get(link)
         if r.status_code == 200:
             return parse_ynet_results(r)
-    except:
-        print("Error")
-        return []
+        else:
+            print("Error: ", r.status_code, r.text)
+            return jsonify([])
+    except Exception as e:
+        print("Error: ", e)
+        return jsonify([])
 
 
 @app.route('/', defaults={'path': ''})
