@@ -1,10 +1,18 @@
 import xml.etree.ElementTree as ET
+from pymongo import MongoClient
 from flask import Flask, send_from_directory, request
 from flask import jsonify
+import urllib.parse
 import requests
 import os
-
+USER = os.getenv('DB_USER')
+PASSWORD = os.environ.get('DB_PWD')
+PORT = os.environ.get('DB_PORT') or 3344
+username = urllib.parse.quote_plus(USER)
+password = urllib.parse.quote_plus(PASSWORD)
+client = MongoClient('mongodb://%s:%s@ds247077.mlab.com:47077/ok-news' % (username, password))
 app = Flask(__name__, static_folder='build')
+db = client['ok-news']
 
 
 def parse_rss_item(item, source):
@@ -19,9 +27,10 @@ def parse_rss_item(item, source):
         if child.tag == 'description':
             obj_to_return['desc'] = child.text
         if child.tag == 'guid':
-            obj_to_return['id'] = child.text
+            obj_to_return['uuid'] = child.text
+    if 'uuid' not in obj_to_return:
+        obj_to_return['uuid'] = obj_to_return['link'][obj_to_return['link'].rfind('/') + 1:]
     return obj_to_return
-
 
 
 def parse_results(res, source):
@@ -116,6 +125,15 @@ def ynet_news():
         return jsonify([])
 
 
+@app.route("/tweets")
+def get_tweets():
+    tweets = []
+    for tweet in db.tweets.find():
+        tweet['_id'] = str(tweet['_id'])
+        tweets.append(tweet)
+    return jsonify(tweets)
+
+
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
@@ -127,4 +145,4 @@ def serve(path):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host='0.0.0.0', port=3344)
+    app.run(debug=True, host='0.0.0.0', port=PORT)
